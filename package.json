@@ -8,7 +8,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:android": "eas build -p android --profile production",
+    "build:android-dev": "eas build -p android --profile development"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
@@ -41,7 +43,8 @@
     "expo-document-picker": "~13.1.5",
     "expo-av": "~15.1.4",
     "expo-audio": "~0.4.4",
-    "@react-native-community/slider": "4.5.6"
+    "@react-native-community/slider": "4.5.6",
+    "expo-dev-client": "~5.1.8"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

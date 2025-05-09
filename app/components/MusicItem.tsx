@@ -33,7 +33,7 @@ export default function MusicItem({ item, onPress, onDelete, isCurrent }: MusicI
       <TouchableOpacity
         style={styles.deleteButton}
         onPress={onDelete}>
-        <AntDesign name="minuscircleo" size={18} />
+        <AntDesign name="minuscircleo" size={18} color="#666" />
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -47,13 +47,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#eee',
   },
   musicInfo: {
     flex: 1,
   },
   musicName: {
     fontSize: 16,
+    color: '#666',
   },
   currentMusicName: {
     color: '#2775B7',

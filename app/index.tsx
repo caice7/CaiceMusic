@@ -11,9 +11,30 @@ export default function HomeScreen() {
   const [items, setItems] = useState<string[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [inputText, setInputText] = useState('');
+  // 打印所有存储内容
+  const printAllStorage = async () => {
+    try {
+      // 获取所有存储键
+      const keys = await AsyncStorage.getAllKeys();  // :ml-citation{ref="4,7" data="citationList"}
+
+      // 批量获取键值对
+      const storedData = await AsyncStorage.multiGet(keys);  // :ml-citation{ref="4,7" data="citationList"}
+
+      // 遍历输出结果
+      let result = '';
+      storedData.forEach(([key, value]) => {
+        result += `[${key}]: ${value}\n`;
+      });
+      alert(result);
+    } catch (error) {
+      console.error('读取存储失败:', error);  // :ml-citation{ref="3,4" data="citationList"}
+    }
+  };
+
 
   useFocusEffect(
     useCallback(() => {
+      // printAllStorage();
       const loadItems = async () => {
         try {
           const [storedItems, lastClickedItem] = await Promise.all([
@@ -96,7 +117,7 @@ export default function HomeScreen() {
       <TouchableOpacity
         style={styles.deleteButton}
         onPress={() => deleteItem(index, item)}>
-        <AntDesign name="minuscircleo" size={18} />
+        <AntDesign name="minuscircleo" size={18} color="#666" />
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -168,11 +189,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#eee',
   },
   itemText: {
     flex: 1,
     fontSize: 16,
+    color: '#666',
   },
   deleteButton: {
     padding: 5,

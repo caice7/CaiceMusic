@@ -5,6 +5,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import MusicItem from './components/MusicItem';
 import PlayerBar, { PlayMode } from './components/PlayerBar';
 import SearchModal from './components/SearchModal';
@@ -505,7 +506,7 @@ export default function MusicScreen() {
           ),
         }}
       />
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
         <FlatList
           ref={flatListRef}
           data={musicFiles}
@@ -521,25 +522,27 @@ export default function MusicScreen() {
           style={styles.list}
           contentContainerStyle={styles.listContent}
         />
-        <PlayerBar
-          currentMusic={currentMusic}
-          isPlaying={isPlaying}
-          position={position}
-          duration={duration}
-          sliderValue={sliderValue}
-          onSliderChange={handleSliderChange}
-          onSliderComplete={handleSliderComplete}
-          onSeek={handleSeek}
-          onPlayPause={handlePlayPause}
-          onSearch={() => setSearchVisible(true)}
-          isDragging={isDragging}
-          playMode={playMode}
-          onPlayModeChange={handlePlayModeChange}
-          onPlayNext={handleNextMusic}
-          onTimerPress={() => setTimerVisible(true)}
-          timerActive={timerActive}
-        />
-      </View>
+        <View style={styles.playerBarContainer}>
+          <PlayerBar
+            currentMusic={currentMusic}
+            isPlaying={isPlaying}
+            position={position}
+            duration={duration}
+            sliderValue={sliderValue}
+            onSliderChange={handleSliderChange}
+            onSliderComplete={handleSliderComplete}
+            onSeek={handleSeek}
+            onPlayPause={handlePlayPause}
+            onSearch={() => setSearchVisible(true)}
+            isDragging={isDragging}
+            playMode={playMode}
+            onPlayModeChange={handlePlayModeChange}
+            onPlayNext={handleNextMusic}
+            onTimerPress={() => setTimerVisible(true)}
+            timerActive={timerActive}
+          />
+        </View>
+      </SafeAreaView>
 
       <SearchModal
         visible={searchVisible}
@@ -569,6 +572,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingBottom: 90, // 减少底部空间
+    paddingBottom: 90,
+  },
+  playerBarContainer: {
+    backgroundColor: '#2775B7',
+    paddingBottom: 0,
   },
 });

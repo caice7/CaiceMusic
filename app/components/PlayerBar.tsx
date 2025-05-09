@@ -116,17 +116,17 @@ export default function PlayerBar({
       </View>
       <View style={styles.bottomControls}>
         <TouchableOpacity
-          style={styles.searchButton}
+          style={styles.controlButton}
           onPress={onSearch}>
           <AntDesign name="search1" size={BUTTON_SIZE} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.playModeButton}
+          style={styles.controlButton}
           onPress={onPlayModeChange}>
           <AntDesign name={getPlayModeIcon()} size={BUTTON_SIZE} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.playButton}
+          style={styles.controlButton}
           onPress={onPlayPause}>
           <AntDesign
             name={isPlaying ? "pausecircleo" : "playcircleo"}
@@ -135,12 +135,12 @@ export default function PlayerBar({
           />
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.nextButton}
+          style={styles.controlButton}
           onPress={onPlayNext}>
           <AntDesign name="stepforward" size={BUTTON_SIZE} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.timerButton, timerActive && styles.timerButtonActive]}
+          style={[styles.controlButton, timerActive && styles.timerButtonActive]}
           onPress={onTimerPress}>
           <AntDesign name="clockcircleo" size={BUTTON_SIZE} color="#fff" />
         </TouchableOpacity>
@@ -188,27 +188,15 @@ const styles = StyleSheet.create({
   seekButton: {
     padding: 3,
   },
-  playButton: {
-    alignSelf: 'center',
-    padding: 3,
-  },
   bottomControls: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 15,
+    width: '100%',
   },
-  searchButton: {
-    padding: 3,
-  },
-  playModeButton: {
-    padding: 3,
-  },
-  nextButton: {
-    padding: 3,
-  },
-  timerButton: {
-    padding: 3,
+  controlButton: {
+    flex: 1,
+    alignItems: 'center',
   },
   timerButtonActive: {
     backgroundColor: '#ffffff40',
