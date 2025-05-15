@@ -4,7 +4,7 @@ import { Audio } from 'expo-av';
 import * as DocumentPicker from 'expo-document-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { AppState, BackHandler, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MusicItem from './components/MusicItem';
 import PlayerBar, { PlayMode } from './components/PlayerBar';
@@ -41,6 +41,25 @@ export default function MusicScreen() {
   const [timerVisible, setTimerVisible] = useState(false);
   const [timerActive, setTimerActive] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 配置音频模式
+  useEffect(() => {
+    const configureAudio = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+      } catch (error) {
+        console.error('Error setting audio mode:', error);
+      }
+    };
+
+    configureAudio();
+  }, []);
+
 
   // 格式化时间为 MM:SS 格式
   const formatTime = (milliseconds: number) => {
@@ -211,7 +230,11 @@ export default function MusicScreen() {
     try {
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri },
-        { shouldPlay },
+        {
+          shouldPlay,
+          androidImplementation: 'MediaPlayer',
+          progressUpdateIntervalMillis: 100,
+        },
         (status) => {
           if (status.isLoaded) {
             const currentPosition = formatTime(status.positionMillis);
@@ -457,7 +480,7 @@ export default function MusicScreen() {
   // 处理返回按钮
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // 停止音乐播放
+      // 返回时暂停音乐
       if (sound && isPlaying) {
         sound.pauseAsync();
         setIsPlaying(false);
@@ -469,6 +492,29 @@ export default function MusicScreen() {
 
     return () => backHandler.remove();
   }, [sound, isPlaying]);
+
+  // 处理应用状态变化
+  useEffect(() => {
+    const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && sound && currentMusic) {
+        // 如果应用从后台回到前台，且有音乐实例和当前音乐，恢复播放状态
+        sound.getStatusAsync().then((status) => {
+          if (!status.isLoaded) return;
+
+          if (!status.isPlaying && isPlaying) {
+            // 如果音乐应该播放但实际已暂停，则恢复播放
+            sound.playAsync();
+          }
+        }).catch(error => {
+          console.error('Error checking sound status:', error);
+        });
+      }
+    });
+
+    return () => {
+      appStateSubscription.remove();
+    };
+  }, [sound, isPlaying, currentMusic]);
 
   return (
     <>
