@@ -1,10 +1,11 @@
 import AntDesign from '@expo/vector-icons/AntDesign';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeAndroid } from 'expo-av';
 import * as DocumentPicker from 'expo-document-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, BackHandler, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import MusicControl, { Command } from 'react-native-music-control';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MusicItem from './components/MusicItem';
 import PlayerBar, { PlayMode } from './components/PlayerBar';
@@ -51,13 +52,28 @@ export default function MusicScreen() {
           staysActiveInBackground: true,
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false,
+          interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
         });
+
+        // 配置媒体控制
+        MusicControl.enableBackgroundMode(true);
+
+        // 监听媒体控制事件
+        MusicControl.on(Command.play, () => handlePlayPause());
+        MusicControl.on(Command.pause, () => handlePlayPause());
+        MusicControl.on(Command.previousTrack, () => { });
+        MusicControl.on(Command.nextTrack, () => handleNextMusic());
       } catch (error) {
         console.error('Error setting audio mode:', error);
       }
     };
 
     configureAudio();
+
+    // 清理函数
+    return () => {
+      MusicControl.stopControl();
+    };
   }, []);
 
 
@@ -149,9 +165,15 @@ export default function MusicScreen() {
       if (isPlaying) {
         await sound.pauseAsync();
         setIsPlaying(false);
+        MusicControl.updatePlayback({
+          state: MusicControl.STATE_PAUSED
+        });
       } else {
         await sound.playAsync();
         setIsPlaying(true);
+        MusicControl.updatePlayback({
+          state: MusicControl.STATE_PLAYING
+        });
       }
     } catch (error) {
       console.error('Error toggling play/pause:', error);
@@ -300,6 +322,13 @@ export default function MusicScreen() {
       if (newSound) {
         setSound(newSound);
         setIsPlaying(true);
+
+        // 更新媒体控制通知栏
+        MusicControl.updatePlayback({
+          title: item.name,
+          duration: duration,
+          state: MusicControl.STATE_PLAYING
+        });
       }
 
       // 保存更新后的状态到 AsyncStorage
