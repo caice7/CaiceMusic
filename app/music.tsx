@@ -1,3 +1,7 @@
+import MusicItem from '@/components/MusicItem';
+import PlayerBar, { PlayMode } from '@/components/PlayerBar';
+import SearchModal from '@/components/SearchModal';
+import TimerModal from '@/components/TimerModal';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
@@ -6,10 +10,6 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, BackHandler, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MusicItem from './components/MusicItem';
-import PlayerBar, { PlayMode } from './components/PlayerBar';
-import SearchModal from './components/SearchModal';
-import TimerModal from './components/TimerModal';
 
 interface MusicFile {
   // 歌名
@@ -60,6 +60,11 @@ export default function MusicScreen() {
     configureAudio();
   }, []);
 
+  // 保存进度
+  const savePostion = (value: number) => {
+    setSliderValue(value);
+    AsyncStorage.setItem(`@music/sliderValue/${title}`, value + '');
+  }
 
   // 格式化时间为 MM:SS 格式
   const formatTime = (milliseconds: number) => {
@@ -70,9 +75,9 @@ export default function MusicScreen() {
   };
 
   // 处理进度条拖动
-  const handleSliderChange = useCallback((value: number) => {
+  const handleSliderChange = (value: number) => {
     setSliderValue(value);
-  }, []);
+  };
 
   // 更新播放进度
   const updatePlaybackStatus = useCallback(async () => {
@@ -85,7 +90,7 @@ export default function MusicScreen() {
           if (currentPosition !== lastPosition.current) {
             lastPosition.current = currentPosition;
             setPosition(currentPosition);
-            setSliderValue(status.positionMillis);
+            savePostion(status.positionMillis);
           }
         }
       } catch (error) {
@@ -122,7 +127,7 @@ export default function MusicScreen() {
         const time = formatTime(value);
         lastPosition.current = time;
         setPosition(time);
-        setSliderValue(value);
+        savePostion(value);
       } catch (error) {
         console.error('Error seeking:', error);
       }
@@ -142,6 +147,7 @@ export default function MusicScreen() {
     }
   }, [sound, position, duration]);
 
+  // 处理播放暂停
   const handlePlayPause = useCallback(async () => {
     if (!currentMusic || !sound) return;
 
@@ -243,7 +249,7 @@ export default function MusicScreen() {
               lastPosition.current = currentPosition;
               setPosition(currentPosition);
               if (!isDragging.current) {
-                setSliderValue(status.positionMillis);
+                savePostion(status.positionMillis);
               }
             }
             setDuration(status.durationMillis || 0);
@@ -374,6 +380,25 @@ export default function MusicScreen() {
 
   // 加载保存的音乐文件和当前播放状态
   useEffect(() => {
+
+    const initPlayer = async (currentPlaying: string | null, files: any) => {
+      // 如果有正在播放的音乐，设置当前音乐并加载音频
+      if (!currentPlaying) return;
+      const playingMusic = files.find((file: MusicFile) => file.name === currentPlaying);
+      if (!playingMusic) return;
+      setCurrentMusic(playingMusic);
+      // 加载音频但不自动播放
+      const newSound = await createAudioInstance(playingMusic.uri, false);
+      if (!newSound) return;
+      setSound(newSound);
+      setIsPlaying(false);
+
+      // 加载播放的进度
+      const value = await AsyncStorage.getItem(`@music/sliderValue/${title}`);
+      if (!value || value === '0') return;
+      newSound.setPositionAsync(parseFloat(value));
+    }
+
     const loadData = async () => {
       try {
         const [savedFiles, currentPlaying, savedPlayMode] = await Promise.all([
@@ -382,23 +407,11 @@ export default function MusicScreen() {
           AsyncStorage.getItem(`@music/playMode`)
         ]);
 
+        // 加载保存的音乐文件
         if (savedFiles) {
           const files = JSON.parse(savedFiles);
           setMusicFiles(files);
-
-          // 如果有正在播放的音乐，设置当前音乐并加载音频
-          if (currentPlaying) {
-            const playingMusic = files.find((file: MusicFile) => file.name === currentPlaying);
-            if (playingMusic) {
-              setCurrentMusic(playingMusic);
-              // 加载音频但不自动播放
-              const newSound = await createAudioInstance(playingMusic.uri, false);
-              if (newSound) {
-                setSound(newSound);
-                setIsPlaying(false);
-              }
-            }
-          }
+          initPlayer(currentPlaying, files);
         }
 
         // 加载保存的播放模式

@@ -1,9 +1,9 @@
+import CustomModal from '@/components/Modal';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import CustomModal from './components/Modal';
 
 const STORAGE_KEY = '@myapp/items';
 
@@ -15,19 +15,17 @@ export default function HomeScreen() {
   const printAllStorage = async () => {
     try {
       // 获取所有存储键
-      const keys = await AsyncStorage.getAllKeys();  // :ml-citation{ref="4,7" data="citationList"}
-
+      const keys = await AsyncStorage.getAllKeys();
       // 批量获取键值对
-      const storedData = await AsyncStorage.multiGet(keys);  // :ml-citation{ref="4,7" data="citationList"}
-
+      const storedData = await AsyncStorage.multiGet(keys);
       // 遍历输出结果
       let result = '';
       storedData.forEach(([key, value]) => {
         result += `[${key}]: ${value}\n`;
       });
-      alert(result);
+      console.log(result);
     } catch (error) {
-      console.error('读取存储失败:', error);  // :ml-citation{ref="3,4" data="citationList"}
+      console.error('读取存储失败:', error);
     }
   };
 
