@@ -36,6 +36,13 @@ interface PlayerBarProps {
 
 const BUTTON_SIZE = 18;
 
+export const formatTime = (milliseconds: number) => {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
+
 export default function PlayerBar({
   currentMusic,
   isPlaying,
@@ -54,13 +61,6 @@ export default function PlayerBar({
   onTimerPress,
   timerActive,
 }: PlayerBarProps) {
-  // 格式化时间为 MM:SS 格式
-  const formatTime = (milliseconds: number) => {
-    const totalSeconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
 
   // 获取播放模式图标
   const getPlayModeIcon = () => {
@@ -102,6 +102,7 @@ export default function PlayerBar({
           }}
           onSlidingComplete={(value) => {
             isDragging.current = false;
+            console.log(value);
             onSliderComplete(value);
           }}
           minimumTrackTintColor="#fff"

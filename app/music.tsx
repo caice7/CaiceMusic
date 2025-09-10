@@ -1,15 +1,17 @@
 import MusicItem from '@/components/MusicItem';
-import PlayerBar, { PlayMode } from '@/components/PlayerBar';
+import PlayerBar, { formatTime, PlayMode } from '@/components/PlayerBar';
 import SearchModal from '@/components/SearchModal';
 import TimerModal from '@/components/TimerModal';
+import TrackPlayerService from '@/services/TrackPlayerService';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Audio } from 'expo-av';
-import * as DocumentPicker from 'expo-document-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, BackHandler, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { AppState, BackHandler, FlatList, NativeModules, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import TrackPlayer, { State, usePlaybackState, useProgress } from 'react-native-track-player';
+
+const { FilePathModule } = NativeModules;
 
 interface MusicFile {
   // 歌名
@@ -25,14 +27,12 @@ export default function MusicScreen() {
   const title = params.title as string;
   const [musicFiles, setMusicFiles] = useState<MusicFile[]>([]);
   const [currentMusic, setCurrentMusic] = useState<MusicFile | null>(null);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [position, setPosition] = useState('00:00');
-  const [duration, setDuration] = useState(0);
+  const [sliderPosition, setSliderPosition] = useState('00:00');
+  const [musicDuration, setMusicDuration] = useState(0);
   const [sliderValue, setSliderValue] = useState(0);
   const isDragging = useRef(false);
   const lastPosition = useRef("00:00");
-  const updateInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [currentSearchIndex, setCurrentSearchIndex] = useState(-1);
@@ -41,24 +41,27 @@ export default function MusicScreen() {
   const [timerVisible, setTimerVisible] = useState(false);
   const [timerActive, setTimerActive] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trackPlayerService = useRef(TrackPlayerService.getInstance());
+  const { position, duration } = useProgress(500);
+  const playbackState = usePlaybackState();
 
-  // 配置音频模式
+  // 更新进度（替代 setDuration + setPosition）
   useEffect(() => {
-    const configureAudio = async () => {
-      try {
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
-        });
-      } catch (error) {
-        console.error('Error setting audio mode:', error);
-      }
-    };
+    setMusicDuration(duration * 1000); // 转成毫秒，保持和你原逻辑一致
+    setSliderPosition(formatTime(position * 1000));
 
-    configureAudio();
-  }, []);
+    if (!isDragging.current) {
+      savePostion(position * 1000);
+    }
+  }, [position, duration]);
+
+  // 播放状态（替代 setIsPlaying）
+  useEffect(() => {
+    setIsPlaying(playbackState.state === State.Playing);
+    if (playbackState.state === State.Ended) {
+      handleNextMusic();
+    }
+  }, [playbackState]);
 
   // 保存进度
   const savePostion = (value: number) => {
@@ -66,103 +69,49 @@ export default function MusicScreen() {
     AsyncStorage.setItem(`@music/sliderValue/${title}`, value + '');
   }
 
-  // 格式化时间为 MM:SS 格式
-  const formatTime = (milliseconds: number) => {
-    const totalSeconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
   // 处理进度条拖动
   const handleSliderChange = (value: number) => {
     setSliderValue(value);
   };
 
-  // 更新播放进度
-  const updatePlaybackStatus = useCallback(async () => {
-    if (sound && isPlaying && !isDragging.current) {
-      try {
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded) {
-          const currentPosition = formatTime(status.positionMillis);
-          // 只有当位置真正发生变化时才更新
-          if (currentPosition !== lastPosition.current) {
-            lastPosition.current = currentPosition;
-            setPosition(currentPosition);
-            savePostion(status.positionMillis);
-          }
-        }
-      } catch (error) {
-        console.error('Error updating playback status:', error);
-      }
-    }
-  }, [sound, isPlaying]);
-
-  // 设置定时更新
-  useEffect(() => {
-    if (isPlaying && !isDragging.current) {
-      // 每100ms更新一次状态
-      updateInterval.current = setInterval(() => {
-        updatePlaybackStatus();
-      }, 100);
-    } else {
-      if (updateInterval.current) {
-        clearInterval(updateInterval.current);
-      }
-    }
-
-    return () => {
-      if (updateInterval.current) {
-        clearInterval(updateInterval.current);
-      }
-    };
-  }, [isPlaying, updatePlaybackStatus]);
-
   // 处理进度条拖动完成
   const handleSliderComplete = useCallback(async (value: number) => {
-    if (sound) {
-      try {
-        await sound.setPositionAsync(value);
-        const time = formatTime(value);
-        lastPosition.current = time;
-        setPosition(time);
-        savePostion(value);
-      } catch (error) {
-        console.error('Error seeking:', error);
-      }
+    try {
+      await TrackPlayer.seekTo(value / 1000);
+      const time = formatTime(value);
+      lastPosition.current = time;
+      setSliderPosition(time);
+      savePostion(value);
+    } catch (error) {
+      console.error('Error seeking:', error);
     }
-  }, [sound]);
+  }, []);
 
   // 处理快进快退
   const handleSeek = useCallback(async (seconds: number) => {
-    if (sound) {
-      try {
-        const newPosition = Math.max(0, Math.min(sliderValue + seconds * 1000, duration));
-        await sound.setPositionAsync(newPosition);
-        setPosition(formatTime(newPosition));
-      } catch (error) {
-        console.error('Error seeking:', error);
-      }
+    try {
+      const newPosition = Math.max(0, Math.min(sliderValue + seconds * 1000, musicDuration));
+      await TrackPlayer.seekTo(newPosition / 1000);
+      setSliderPosition(formatTime(newPosition));
+    } catch (error) {
+      console.error('Error seeking:', error);
     }
-  }, [sound, position, duration]);
+  }, [sliderValue, musicDuration]);
 
   // 处理播放暂停
   const handlePlayPause = useCallback(async () => {
-    if (!currentMusic || !sound) return;
+    if (!currentMusic) return;
 
     try {
       if (isPlaying) {
-        await sound.pauseAsync();
-        setIsPlaying(false);
+        await TrackPlayer.pause();
       } else {
-        await sound.playAsync();
-        setIsPlaying(true);
+        await TrackPlayer.play();
       }
     } catch (error) {
       console.error('Error toggling play/pause:', error);
     }
-  }, [currentMusic, sound, isPlaying]);
+  }, [currentMusic, isPlaying]);
 
   // 处理播放模式切换
   const handlePlayModeChange = () => {
@@ -185,9 +134,11 @@ export default function MusicScreen() {
     switch (playMode) {
       case PlayMode.SINGLE:
         // 单曲循环：重新播放当前歌曲
-        if (sound) {
-          await sound.setPositionAsync(0);
-          await sound.playAsync();
+        try {
+          await TrackPlayer.seekTo(0);
+          await TrackPlayer.play();
+        } catch (error) {
+          console.error('Error restarting track:', error);
         }
         break;
       case PlayMode.SEQUENCE:
@@ -229,46 +180,27 @@ export default function MusicScreen() {
         }
         break;
     }
-  }, [currentMusic, sound, playMode, musicFiles]);
+  }, [currentMusic, musicFiles, playMode]);
 
   // 创建音频实例
   const createAudioInstance = useCallback(async (uri: string, shouldPlay: boolean = false) => {
     try {
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri },
-        {
-          shouldPlay,
-          androidImplementation: 'MediaPlayer',
-          progressUpdateIntervalMillis: 100,
-        },
-        (status) => {
-          if (status.isLoaded) {
-            const currentPosition = formatTime(status.positionMillis);
-            // 只有当位置真正发生变化时才更新
-            if (currentPosition !== lastPosition.current) {
-              lastPosition.current = currentPosition;
-              setPosition(currentPosition);
-              if (!isDragging.current) {
-                savePostion(status.positionMillis);
-              }
-            }
-            setDuration(status.durationMillis || 0);
-            setIsPlaying(status.isPlaying);
-
-            // 检查是否播放完成
-            if (status.didJustFinish) {
-              handleNextMusic();
-            }
-          }
-        },
-        true // 启用状态更新回调
-      );
-      return newSound;
+      await TrackPlayer.reset();
+      await TrackPlayer.add({
+        url: uri,
+        title: uri.split('/').pop() || 'Unknown',
+        artist: 'Unknown Artist',
+        duration: 0, // 实际时长需要从文件获取
+      });
+      if (shouldPlay) {
+        await TrackPlayer.play();
+      }
+      return true;
     } catch (error) {
       console.error('Error creating audio instance:', error);
-      return null;
+      return false;
     }
-  }, [handleNextMusic]);
+  }, []);
 
   // 处理播放音乐
   const handlePlayMusic = async (item: MusicFile, resetFiles?: MusicFile[]) => {
@@ -277,19 +209,19 @@ export default function MusicScreen() {
       if (currentMusic?.name === item.name) {
         if (isPlaying) {
           // 暂停播放
-          await sound?.pauseAsync();
-          setIsPlaying(false);
+          await TrackPlayer.pause();
         } else {
           // 继续播放
-          await sound?.playAsync();
-          setIsPlaying(true);
+          await TrackPlayer.play();
         }
         return;
       }
 
       // 如果有正在播放的音乐，先停止
-      if (sound) {
-        await sound.unloadAsync();
+      try {
+        await TrackPlayer.stop();
+      } catch (error) {
+        console.error('Error stopping track:', error);
       }
 
       // 更新所有音乐的播放状态
@@ -302,11 +234,7 @@ export default function MusicScreen() {
       setCurrentMusic(item);
 
       // 创建并播放新的音频实例
-      const newSound = await createAudioInstance(item.uri, true);
-      if (newSound) {
-        setSound(newSound);
-        setIsPlaying(true);
-      }
+      await createAudioInstance(item.uri, true);
 
       // 保存更新后的状态到 AsyncStorage
       await Promise.all([
@@ -327,10 +255,10 @@ export default function MusicScreen() {
       // 如果删除的是当前播放的音乐，清除播放状态
       if (currentMusic && currentMusic.name === musicFiles[index].name) {
         setCurrentMusic(null);
-        setIsPlaying(false);
-        if (sound) {
-          await sound.unloadAsync();
-          setSound(null);
+        try {
+          await TrackPlayer.stop();
+        } catch (error) {
+          console.error('Error stopping track:', error);
         }
         await AsyncStorage.removeItem(`@music/playing/${title}`);
       }
@@ -339,7 +267,7 @@ export default function MusicScreen() {
     } catch (error) {
       console.error('Error deleting music file:', error);
     }
-  }, [currentMusic, musicFiles, sound, title]);
+  }, [currentMusic, musicFiles, title]);
 
   // 搜索功能
   const handleSearch = useCallback(() => {
@@ -388,19 +316,18 @@ export default function MusicScreen() {
       if (!playingMusic) return;
       setCurrentMusic(playingMusic);
       // 加载音频但不自动播放
-      const newSound = await createAudioInstance(playingMusic.uri, false);
-      if (!newSound) return;
-      setSound(newSound);
-      setIsPlaying(false);
+      const res = await createAudioInstance(playingMusic.uri, false);
+      if (!res) return;
 
       // 加载播放的进度
       const value = await AsyncStorage.getItem(`@music/sliderValue/${title}`);
       if (!value || value === '0') return;
-      newSound.setPositionAsync(parseFloat(value));
+      await TrackPlayer.seekTo(parseFloat(value));
     }
 
     const loadData = async () => {
       try {
+        await trackPlayerService.current.initialize();
         const [savedFiles, currentPlaying, savedPlayMode] = await Promise.all([
           AsyncStorage.getItem(`@music/${title}`),
           AsyncStorage.getItem(`@music/playing/${title}`),
@@ -427,26 +354,25 @@ export default function MusicScreen() {
 
     // 清理函数
     return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
+      // 在清理函数中不能使用 async/await，所以使用同步方式
+      TrackPlayer.stop();
     };
   }, [title]);
 
+  // 选择音乐文件
   const pickMusicFiles = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'audio/*',
-        multiple: true,
-        copyToCacheDirectory: true,
-      });
+      // 用户选择文件夹
+      const folderUri = await FilePathModule.pickFolder();
+      console.log('选择的文件夹 URI:', folderUri);
 
-      if (result.canceled) {
-        return;
-      }
+      // 遍历该文件夹下的所有文件
+      const filesJson = await FilePathModule.listFilesInFolder(folderUri);
+      const files: any[] = JSON.parse(filesJson);
+      console.log('文件列表:', files);
 
-      const newFiles = result.assets.map(file => ({
-        name: file.name,
+      const newFiles = files.map((file) => ({
+        name: file.name || '',
         uri: file.uri,
         played: false,
       }));
@@ -454,7 +380,7 @@ export default function MusicScreen() {
       const updatedFiles = [...musicFiles, ...newFiles];
       setMusicFiles(updatedFiles);
 
-      // 保存到 AsyncStorage
+      // // 保存到 AsyncStorage
       await AsyncStorage.setItem(`@music/${title}`, JSON.stringify(updatedFiles));
     } catch (error) {
       console.error('Error picking music files:', error);
@@ -470,16 +396,19 @@ export default function MusicScreen() {
 
     // 设置新的定时器
     const milliseconds = hours * 60 * 60 * 1000;
-    timerRef.current = setTimeout(() => {
-      if (sound && isPlaying) {
-        sound.pauseAsync();
-        setIsPlaying(false);
+    timerRef.current = setTimeout(async () => {
+      if (isPlaying) {
+        try {
+          await TrackPlayer.pause();
+        } catch (error) {
+          console.error('Error pausing track:', error);
+        }
       }
       setTimerActive(false);
     }, milliseconds);
 
     setTimerActive(true);
-  }, [sound, isPlaying]);
+  }, [isPlaying]);
 
   // 清理定时器
   useEffect(() => {
@@ -494,9 +423,15 @@ export default function MusicScreen() {
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       // 返回时暂停音乐
-      if (sound && isPlaying) {
-        sound.pauseAsync();
-        setIsPlaying(false);
+      if (isPlaying) {
+        const pauseMusic = async () => {
+          try {
+            await TrackPlayer.pause();
+          } catch (error) {
+            console.error('Error pausing track:', error);
+          }
+        };
+        pauseMusic();
       }
       // 清除最后点击的 item
       AsyncStorage.removeItem('@myapp/lastClickedItem');
@@ -504,30 +439,32 @@ export default function MusicScreen() {
     });
 
     return () => backHandler.remove();
-  }, [sound, isPlaying]);
+  }, [isPlaying]);
 
   // 处理应用状态变化
   useEffect(() => {
     const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active' && sound && currentMusic) {
+      if (nextAppState === 'active' && currentMusic) {
         // 如果应用从后台回到前台，且有音乐实例和当前音乐，恢复播放状态
-        sound.getStatusAsync().then((status) => {
-          if (!status.isLoaded) return;
-
-          if (!status.isPlaying && isPlaying) {
-            // 如果音乐应该播放但实际已暂停，则恢复播放
-            sound.playAsync();
+        const checkAndResume = async () => {
+          try {
+            const status = await TrackPlayer.getState();
+            console.log(status);
+            if (status === State.Paused || status === State.Ready) {
+              await TrackPlayer.play();
+            }
+          } catch (error) {
+            console.error('Error checking sound status:', error);
           }
-        }).catch(error => {
-          console.error('Error checking sound status:', error);
-        });
+        };
+        checkAndResume();
       }
     });
 
     return () => {
       appStateSubscription.remove();
     };
-  }, [sound, isPlaying, currentMusic]);
+  }, [isPlaying, currentMusic]);
 
   return (
     <>
@@ -545,9 +482,12 @@ export default function MusicScreen() {
               style={{ width: 24, marginLeft: 15 }}
               onPress={async () => {
                 // 停止音乐播放
-                if (sound && isPlaying) {
-                  await sound.pauseAsync();
-                  setIsPlaying(false);
+                if (isPlaying) {
+                  try {
+                    await TrackPlayer.pause();
+                  } catch (error) {
+                    console.error('Error pausing track:', error);
+                  }
                 }
                 // 清除最后点击的 item
                 await AsyncStorage.removeItem('@myapp/lastClickedItem');
@@ -585,8 +525,8 @@ export default function MusicScreen() {
           <PlayerBar
             currentMusic={currentMusic}
             isPlaying={isPlaying}
-            position={position}
-            duration={duration}
+            position={sliderPosition}
+            duration={musicDuration}
             sliderValue={sliderValue}
             onSliderChange={handleSliderChange}
             onSliderComplete={handleSliderComplete}
