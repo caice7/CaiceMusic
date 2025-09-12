@@ -9,7 +9,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, BackHandler, FlatList, NativeModules, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import TrackPlayer, { State, usePlaybackState, useProgress } from 'react-native-track-player';
+import TrackPlayer, { Event, State, usePlaybackState, useProgress } from 'react-native-track-player';
 
 const { FilePathModule } = NativeModules;
 
@@ -50,11 +50,11 @@ export default function MusicScreen() {
   // 更新进度（替代 setDuration + setPosition）
   useEffect(() => {
     if (duration === 0 || position === duration) return;
-    setMusicDuration(duration * 1000); // 转成毫秒
-    setSliderPosition(formatTime(position * 1000));
+    setMusicDuration(duration); // 转成毫秒
+    setSliderPosition(formatTime(position));
 
     if (!isDragging.current) {
-      savePostion(position * 1000);
+      savePostion(position);
     }
   }, [position, duration]);
 
@@ -65,6 +65,27 @@ export default function MusicScreen() {
       handleNextMusic();
     }
   }, [playbackState]);
+
+  // 锁屏通知栏按钮控制
+  useEffect(() => {
+    TrackPlayer.addEventListener(Event.RemotePlay, async () => {
+      await TrackPlayer.play();
+    });
+
+    TrackPlayer.addEventListener(Event.RemotePause, async () => {
+      await TrackPlayer.pause();
+    });
+
+    TrackPlayer.addEventListener(Event.RemoteNext, async () => {
+      // 这里可以调用你的下一首逻辑
+      console.log('Remote next pressed');
+      await handleNextMusic();
+    });
+
+    TrackPlayer.addEventListener(Event.RemotePrevious, async () => {
+      // 同上，需要自己实现逻辑
+    });
+  }, [])
 
   // 保存进度
   const savePostion = (value: number) => {
@@ -80,7 +101,7 @@ export default function MusicScreen() {
   // 处理进度条拖动完成
   const handleSliderComplete = useCallback(async (value: number) => {
     try {
-      await TrackPlayer.seekTo(value / 1000);
+      await TrackPlayer.seekTo(value);
       const time = formatTime(value);
       lastPosition.current = time;
       setSliderPosition(time);
@@ -93,8 +114,8 @@ export default function MusicScreen() {
   // 处理快进快退
   const handleSeek = useCallback(async (seconds: number) => {
     try {
-      const newPosition = Math.max(0, Math.min(sliderValue + seconds * 1000, musicDuration));
-      await TrackPlayer.seekTo(newPosition / 1000);
+      const newPosition = Math.max(0, Math.min(sliderValue + seconds, musicDuration));
+      await TrackPlayer.seekTo(newPosition);
       setSliderPosition(formatTime(newPosition));
     } catch (error) {
       console.error('Error seeking:', error);
@@ -131,7 +152,8 @@ export default function MusicScreen() {
   };
 
   // 处理下一首音乐
-  const handleNextMusic = useCallback(async () => {
+  const handleNextMusic = async () => {
+    console.log('handleNextMusic', currentMusic, musicFiles.length);
     if (!currentMusic || musicFiles.length === 0) return;
 
     switch (playMode) {
@@ -150,6 +172,7 @@ export default function MusicScreen() {
         const nextIndex = (currentIndex + 1) % musicFiles.length;
         const nextMusic = musicFiles[nextIndex];
         if (nextMusic) {
+          console.log('nextMusic', nextMusic);
           await handlePlayMusic(nextMusic);
         }
         break;
@@ -183,16 +206,17 @@ export default function MusicScreen() {
         }
         break;
     }
-  }, [currentMusic, musicFiles, playMode]);
+  };
 
   // 创建音频实例
   const createAudioInstance = useCallback(async (uri: string, shouldPlay: boolean = false) => {
     try {
       await TrackPlayer.reset();
+      const fileName = decodeURIComponent(uri).split('/').pop() || 'Unknown';
       await TrackPlayer.add({
         url: uri,
-        title: uri.split('/').pop() || 'Unknown',
-        artist: 'Unknown Artist',
+        title: fileName.split(' - ')[1],
+        artist: fileName.split(' - ')[0],
         duration: 0, // 实际时长需要从文件获取
       });
       if (shouldPlay) {
@@ -327,7 +351,7 @@ export default function MusicScreen() {
       if (!value || value === '0') return;
       const p = parseFloat(value);
       setSliderValue(p);
-      await TrackPlayer.seekTo(p / 1000);
+      await TrackPlayer.seekTo(p);
     }
 
     const loadData = async () => {
@@ -369,12 +393,10 @@ export default function MusicScreen() {
     try {
       // 用户选择文件夹
       const folderUri = await FilePathModule.pickFolder();
-      console.log('选择的文件夹 URI:', folderUri);
 
       // 遍历该文件夹下的所有文件
       const filesJson = await FilePathModule.listFilesInFolder(folderUri);
       const files: any[] = JSON.parse(filesJson);
-      console.log('文件列表:', files);
 
       const newFiles = files.map((file) => ({
         name: file.name || '',
@@ -400,7 +422,7 @@ export default function MusicScreen() {
     }
 
     // 设置新的定时器
-    const milliseconds = hours * 60 * 60 * 1000;
+    const milliseconds = hours * 60 * 60;
     timerRef.current = setTimeout(async () => {
       if (isPlaying) {
         try {
@@ -454,7 +476,6 @@ export default function MusicScreen() {
         const checkAndResume = async () => {
           try {
             const status = await TrackPlayer.getState();
-            console.log(status);
             if (status === State.Paused || status === State.Ready) {
               await TrackPlayer.play();
             }

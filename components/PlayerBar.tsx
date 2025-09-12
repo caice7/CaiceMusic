@@ -52,11 +52,10 @@ interface PlayerBarProps {
 
 const BUTTON_SIZE = 18;
 
-export const formatTime = (milliseconds: number) => {
-  const totalSeconds = Math.floor(milliseconds / 1000);
+export const formatTime = (totalSeconds: number) => {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toFixed(0).padStart(2, '0')}`;
 };
 
 export default function PlayerBar({
@@ -107,23 +106,25 @@ export default function PlayerBar({
           onPress={() => onSeek(-5)}>
           <AntDesign name="banckward" size={BUTTON_SIZE} color="#fff" />
         </TouchableOpacity>
-        <Slider
-          style={styles.slider}
-          minimumValue={0}
-          maximumValue={duration}
-          value={sliderValue}
-          onValueChange={onSliderChange}
-          onSlidingStart={() => {
-            isDragging.current = true;
-          }}
-          onSlidingComplete={(value) => {
-            isDragging.current = false;
-            onSliderComplete(value);
-          }}
-          minimumTrackTintColor="#fff"
-          maximumTrackTintColor="#ffffff80"
-          thumbTintColor="#fff"
-        />
+        <View style={styles.sliderContainer}>
+          {duration > 0 && <Slider
+            style={styles.slider}
+            minimumValue={0}
+            maximumValue={duration}
+            value={sliderValue}
+            onValueChange={onSliderChange}
+            onSlidingStart={() => {
+              isDragging.current = true;
+            }}
+            onSlidingComplete={(value) => {
+              isDragging.current = false;
+              onSliderComplete(value);
+            }}
+            minimumTrackTintColor="#fff"
+            maximumTrackTintColor="#ffffff80"
+            thumbTintColor="#fff"
+          />}
+        </View>
         <TouchableOpacity
           style={styles.seekButton}
           onPress={() => onSeek(5)}>
@@ -198,9 +199,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 5,
   },
-  slider: {
+  sliderContainer: {
     flex: 1,
     height: 30,
+  },
+  slider: {
+    flex: 1,
     marginHorizontal: 10,
   },
   seekButton: {
