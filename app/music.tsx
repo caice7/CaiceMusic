@@ -29,7 +29,9 @@ export default function MusicScreen() {
   const [currentMusic, setCurrentMusic] = useState<MusicFile | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [sliderPosition, setSliderPosition] = useState('00:00');
+  // 总时长
   const [musicDuration, setMusicDuration] = useState(0);
+  // 滑块当前值
   const [sliderValue, setSliderValue] = useState(0);
   const isDragging = useRef(false);
   const lastPosition = useRef("00:00");
@@ -47,7 +49,8 @@ export default function MusicScreen() {
 
   // 更新进度（替代 setDuration + setPosition）
   useEffect(() => {
-    setMusicDuration(duration * 1000); // 转成毫秒，保持和你原逻辑一致
+    if (duration === 0 || position === duration) return;
+    setMusicDuration(duration * 1000); // 转成毫秒
     setSliderPosition(formatTime(position * 1000));
 
     if (!isDragging.current) {
@@ -322,7 +325,9 @@ export default function MusicScreen() {
       // 加载播放的进度
       const value = await AsyncStorage.getItem(`@music/sliderValue/${title}`);
       if (!value || value === '0') return;
-      await TrackPlayer.seekTo(parseFloat(value));
+      const p = parseFloat(value);
+      setSliderValue(p);
+      await TrackPlayer.seekTo(p / 1000);
     }
 
     const loadData = async () => {

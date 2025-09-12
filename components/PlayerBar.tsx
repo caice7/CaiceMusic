@@ -1,5 +1,5 @@
 import AntDesign from '@expo/vector-icons/AntDesign';
-import Slider from '@react-native-community/slider';
+import Slider from '@react-native-assets/slider';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -16,21 +16,37 @@ export enum PlayMode {
 }
 
 interface PlayerBarProps {
+  // 当前播放的音乐
   currentMusic: MusicFile | null;
+  // 是否正在播放
   isPlaying: boolean;
+  // 当前播放时间
   position: string;
+  // 总时长
   duration: number;
+  // 滑块当前值
   sliderValue: number;
+  // 改变滑块
   onSliderChange: (value: number) => void;
+  // 滑块完成
   onSliderComplete: (value: number) => void;
+  // 快进快退
   onSeek: (seconds: number) => void;
+  // 播放暂停
   onPlayPause: () => void;
+  // 搜索
   onSearch: () => void;
+  // 拖动
   isDragging: React.RefObject<boolean>;
+  // 播放模式
   playMode: PlayMode;
+  // 播放模式切换
   onPlayModeChange: () => void;
+  // 下一首
   onPlayNext: () => void;
+  // 计时器
   onTimerPress: () => void;
+  // 计时器是否激活
   timerActive: boolean;
 }
 
@@ -102,7 +118,6 @@ export default function PlayerBar({
           }}
           onSlidingComplete={(value) => {
             isDragging.current = false;
-            console.log(value);
             onSliderComplete(value);
           }}
           minimumTrackTintColor="#fff"
@@ -175,6 +190,8 @@ const styles = StyleSheet.create({
   timeText: {
     color: '#fff',
     fontSize: 12,
+    width: 50,
+    textAlign: 'center',
   },
   controls: {
     flexDirection: 'row',
