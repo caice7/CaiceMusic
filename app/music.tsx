@@ -2,9 +2,9 @@ import MusicItem from '@/components/MusicItem';
 import PlayerBar, { formatTime, PlayMode } from '@/components/PlayerBar';
 import SearchModal from '@/components/SearchModal';
 import TimerModal from '@/components/TimerModal';
-import TrackPlayerService from '@/services/TrackPlayerService';
+import LocalStorage from '@/utils/storage';
+import TrackPlayerService from '@/utils/TrackPlayerService';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, BackHandler, FlatList, NativeModules, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -90,7 +90,7 @@ export default function MusicScreen() {
   // 保存进度
   const savePostion = (value: number) => {
     setSliderValue(value);
-    AsyncStorage.setItem(`@music/sliderValue/${title}`, value + '');
+    LocalStorage.setItem(`@music/sliderValue/${title}`, value + '');
   }
 
   // 处理进度条拖动
@@ -148,7 +148,7 @@ export default function MusicScreen() {
       newMode = PlayMode.SEQUENCE;
     }
     setPlayMode(newMode);
-    AsyncStorage.setItem(`@music/playMode`, newMode.toString());
+    LocalStorage.setItem(`@music/playMode`, newMode.toString());
   };
 
   // 处理下一首音乐
@@ -186,7 +186,7 @@ export default function MusicScreen() {
           }));
           setMusicFiles(resetFiles);
           // 保存重置后的状态
-          await AsyncStorage.setItem(`@music/${title}`, JSON.stringify(resetFiles));
+          LocalStorage.setItem(`@music/${title}`, JSON.stringify(resetFiles));
           // 从重置后的列表中随机选择一首非当前播放的歌曲
           const availableSongs = resetFiles.filter(file => file.name !== currentMusic?.name);
           if (availableSongs.length > 0) {
@@ -263,10 +263,10 @@ export default function MusicScreen() {
       // 创建并播放新的音频实例
       await createAudioInstance(item.uri, true);
 
-      // 保存更新后的状态到 AsyncStorage
+      // 保存更新后的状态到 LocalStorage
       await Promise.all([
-        AsyncStorage.setItem(`@music/${title}`, JSON.stringify(updatedFiles)),
-        AsyncStorage.setItem(`@music/playing/${title}`, item.name)
+        LocalStorage.setItem(`@music/${title}`, JSON.stringify(updatedFiles)),
+        LocalStorage.setItem(`@music/playing/${title}`, item.name)
       ]);
 
     } catch (error) {
@@ -287,10 +287,10 @@ export default function MusicScreen() {
         } catch (error) {
           console.error('Error stopping track:', error);
         }
-        await AsyncStorage.removeItem(`@music/playing/${title}`);
+        LocalStorage.removeItem(`@music/playing/${title}`);
       }
 
-      await AsyncStorage.setItem(`@music/${title}`, JSON.stringify(updatedFiles));
+      LocalStorage.setItem(`@music/${title}`, JSON.stringify(updatedFiles));
     } catch (error) {
       console.error('Error deleting music file:', error);
     }
@@ -347,7 +347,7 @@ export default function MusicScreen() {
       if (!res) return;
 
       // 加载播放的进度
-      const value = await AsyncStorage.getItem(`@music/sliderValue/${title}`);
+      const value = LocalStorage.getItem(`@music/sliderValue/${title}`);
       if (!value || value === '0') return;
       const p = parseFloat(value);
       setSliderValue(p);
@@ -358,9 +358,9 @@ export default function MusicScreen() {
       try {
         await trackPlayerService.current.initialize();
         const [savedFiles, currentPlaying, savedPlayMode] = await Promise.all([
-          AsyncStorage.getItem(`@music/${title}`),
-          AsyncStorage.getItem(`@music/playing/${title}`),
-          AsyncStorage.getItem(`@music/playMode`)
+          LocalStorage.getItem(`@music/${title}`),
+          LocalStorage.getItem(`@music/playing/${title}`),
+          LocalStorage.getItem(`@music/playMode`)
         ]);
 
         // 加载保存的音乐文件
@@ -407,8 +407,8 @@ export default function MusicScreen() {
       const updatedFiles = [...musicFiles, ...newFiles];
       setMusicFiles(updatedFiles);
 
-      // // 保存到 AsyncStorage
-      await AsyncStorage.setItem(`@music/${title}`, JSON.stringify(updatedFiles));
+      // // 保存到 LocalStorage
+      LocalStorage.setItem(`@music/${title}`, JSON.stringify(updatedFiles));
     } catch (error) {
       console.error('Error picking music files:', error);
     }
@@ -461,7 +461,7 @@ export default function MusicScreen() {
         pauseMusic();
       }
       // 清除最后点击的 item
-      AsyncStorage.removeItem('@myapp/lastClickedItem');
+      LocalStorage.removeItem('@myapp/lastClickedItem');
       return false; // 返回 false 让系统继续处理返回事件
     });
 
@@ -516,7 +516,7 @@ export default function MusicScreen() {
                   }
                 }
                 // 清除最后点击的 item
-                await AsyncStorage.removeItem('@myapp/lastClickedItem');
+                LocalStorage.removeItem('@myapp/lastClickedItem');
                 router.back();
               }}>
               <AntDesign name="arrowleft" size={24} color="#fff" />

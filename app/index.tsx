@@ -1,6 +1,6 @@
 import CustomModal from '@/components/Modal';
+import LocalStorage from '@/utils/storage';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -11,24 +11,6 @@ export default function HomeScreen() {
   const [items, setItems] = useState<string[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [inputText, setInputText] = useState('');
-  // 打印所有存储内容
-  const printAllStorage = async () => {
-    try {
-      // 获取所有存储键
-      const keys = await AsyncStorage.getAllKeys();
-      // 批量获取键值对
-      const storedData = await AsyncStorage.multiGet(keys);
-      // 遍历输出结果
-      let result = '';
-      storedData.forEach(([key, value]) => {
-        result += `[${key}]: ${value}\n`;
-      });
-      console.log(result);
-    } catch (error) {
-      console.error('读取存储失败:', error);
-    }
-  };
-
 
   useFocusEffect(
     useCallback(() => {
@@ -36,8 +18,8 @@ export default function HomeScreen() {
       const loadItems = async () => {
         try {
           const [storedItems, lastClickedItem] = await Promise.all([
-            AsyncStorage.getItem(STORAGE_KEY),
-            AsyncStorage.getItem('@myapp/lastClickedItem')
+            LocalStorage.getItem(STORAGE_KEY),
+            LocalStorage.getItem('@myapp/lastClickedItem')
           ]);
 
           if (storedItems) {
@@ -66,10 +48,10 @@ export default function HomeScreen() {
   const handleAddItem = async () => {
     if (inputText.trim()) {
       try {
-        const storedItems = await AsyncStorage.getItem(STORAGE_KEY);
+        const storedItems = LocalStorage.getItem(STORAGE_KEY);
         const currentItems = storedItems ? JSON.parse(storedItems) : [];
         const newItems = [...currentItems, inputText.trim()];
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newItems));
+        LocalStorage.setItem(STORAGE_KEY, JSON.stringify(newItems));
         setItems(newItems);
         setInputText('');
         setModalVisible(false);
@@ -81,16 +63,16 @@ export default function HomeScreen() {
 
   const deleteItem = async (index: number, item: string) => {
     try {
-      const storedItems = await AsyncStorage.getItem(STORAGE_KEY);
+      const storedItems = LocalStorage.getItem(STORAGE_KEY);
       if (storedItems) {
         const currentItems = JSON.parse(storedItems);
         const newItems = currentItems.filter((_: any, i: number) => i !== index);
 
         // 删除对应的音乐文件存储
-        await AsyncStorage.removeItem(`@music/${item}`);
+        LocalStorage.removeItem(`@music/${item}`);
 
         // 更新列表存储
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newItems));
+        LocalStorage.setItem(STORAGE_KEY, JSON.stringify(newItems));
         setItems(newItems);
       }
     } catch (error) {
@@ -100,7 +82,7 @@ export default function HomeScreen() {
 
   const handleItemPress = (item: string) => {
     // 保存最后点击的 item
-    AsyncStorage.setItem('@myapp/lastClickedItem', item);
+    LocalStorage.setItem('@myapp/lastClickedItem', item);
     router.push({
       pathname: '/music',
       params: { title: item }
