@@ -1,5 +1,5 @@
 import MusicItem from '@/components/MusicItem';
-import PlayerBar, { formatTime, PlayMode } from '@/components/PlayerBar';
+import PlayerBar, { formatTime, MusicFile, PlayMode } from '@/components/PlayerBar';
 import SearchModal from '@/components/SearchModal';
 import TimerModal from '@/components/TimerModal';
 import LocalStorage from '@/utils/storage';
@@ -7,26 +7,17 @@ import TrackPlayerService from '@/utils/TrackPlayerService';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, BackHandler, FlatList, NativeModules, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { BackHandler, FlatList, NativeModules, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import TrackPlayer, { Event, State, usePlaybackState, useProgress } from 'react-native-track-player';
 
 const { FilePathModule } = NativeModules;
 
-interface MusicFile {
-  // 歌名
-  name: string;
-  // 地址
-  uri: string;
-  // 已播
-  played: boolean;
-}
-
 export default function MusicScreen() {
   const params = useLocalSearchParams();
   const title = params.title as string;
-  const [musicFiles, setMusicFiles] = useState<MusicFile[]>([]);
-  const [currentMusic, setCurrentMusic] = useState<MusicFile | null>(null);
+  const musicFiles = useRef<MusicFile[]>([]);
+  const currentMusic = useRef<MusicFile | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [sliderPosition, setSliderPosition] = useState('00:00');
   // 总时长
@@ -39,13 +30,14 @@ export default function MusicScreen() {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [currentSearchIndex, setCurrentSearchIndex] = useState(-1);
   const flatListRef = useRef<FlatList>(null);
-  const [playMode, setPlayMode] = useState<PlayMode>(PlayMode.SEQUENCE);
+  const playMode = useRef<PlayMode>(PlayMode.SEQUENCE);
   const [timerVisible, setTimerVisible] = useState(false);
   const [timerActive, setTimerActive] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trackPlayerService = useRef(TrackPlayerService.getInstance());
   const { position, duration } = useProgress(500);
   const playbackState = usePlaybackState();
+  const [refresh, setRefresh] = useState(0);
 
   // 更新进度（替代 setDuration + setPosition）
   useEffect(() => {
@@ -77,13 +69,13 @@ export default function MusicScreen() {
     });
 
     TrackPlayer.addEventListener(Event.RemoteNext, async () => {
-      // 这里可以调用你的下一首逻辑
-      console.log('Remote next pressed');
+      // 下一首逻辑
       await handleNextMusic();
     });
 
     TrackPlayer.addEventListener(Event.RemotePrevious, async () => {
-      // 同上，需要自己实现逻辑
+      // 上一首逻辑
+      await handlePreviousMusic();
     });
   }, [])
 
@@ -124,7 +116,7 @@ export default function MusicScreen() {
 
   // 处理播放暂停
   const handlePlayPause = useCallback(async () => {
-    if (!currentMusic) return;
+    if (!currentMusic.current) return;
 
     try {
       if (isPlaying) {
@@ -135,28 +127,83 @@ export default function MusicScreen() {
     } catch (error) {
       console.error('Error toggling play/pause:', error);
     }
-  }, [currentMusic, isPlaying]);
+  }, [isPlaying]);
 
   // 处理播放模式切换
   const handlePlayModeChange = () => {
-    let newMode = playMode;
-    if (playMode === PlayMode.SEQUENCE) {
+    let newMode = playMode.current;
+    if (playMode.current === PlayMode.SEQUENCE) {
       newMode = PlayMode.SINGLE;
-    } else if (playMode === PlayMode.SINGLE) {
+    } else if (playMode.current === PlayMode.SINGLE) {
       newMode = PlayMode.RANDOM;
-    } else if (playMode === PlayMode.RANDOM) {
+    } else if (playMode.current === PlayMode.RANDOM) {
       newMode = PlayMode.SEQUENCE;
     }
-    setPlayMode(newMode);
+    playMode.current = newMode;
     LocalStorage.setItem(`@music/playMode`, newMode.toString());
+    setRefresh(refresh => refresh + 1);
+  };
+
+  // 处理上一首音乐
+  const handlePreviousMusic = async () => {
+    if (!currentMusic.current || musicFiles.current.length === 0) return;
+
+    switch (playMode.current) {
+      case PlayMode.SINGLE:
+        // 单曲循环：重新播放当前歌曲
+        try {
+          await TrackPlayer.seekTo(0);
+          await TrackPlayer.play();
+        } catch (error) {
+          console.error('Error restarting track:', error);
+        }
+        break;
+      case PlayMode.SEQUENCE:
+        // 顺序播放：播放上一首歌曲
+        const currentIndex = musicFiles.current.findIndex(file => file.name === currentMusic.current?.name);
+        const prevIndex = currentIndex === 0 ? musicFiles.current.length - 1 : currentIndex - 1;
+        const prevMusic = musicFiles.current[prevIndex];
+        if (prevMusic) {
+          await handlePlayMusic(prevMusic, false);
+        }
+        break;
+      case PlayMode.RANDOM:
+        // 随机播放：找上一首歌曲，找不到则随机
+        if (currentMusic.current?.played > 1) {
+          // 找所有比当前小的 played
+          const prevCandidates = musicFiles.current.filter(
+            file => file.played < currentMusic.current!.played
+          );
+
+          if (prevCandidates.length > 0) {
+            // 找出 played 最大的那个（最接近当前）
+            const prevMusic = prevCandidates.reduce((prev, curr) =>
+              curr.played > prev.played ? curr : prev
+            );
+
+            if (prevMusic) {
+              await handlePlayMusic(prevMusic, false);
+              return;
+            }
+          }
+        }
+        const availableSongs = musicFiles.current.filter(file => file.name !== currentMusic.current?.name);
+        if (availableSongs.length > 0) {
+          const randomIndex = Math.floor(Math.random() * availableSongs.length);
+          const randomMusic = availableSongs[randomIndex];
+          if (randomMusic) {
+            await handlePlayMusic(randomMusic, false);
+          }
+        }
+        break;
+    }
   };
 
   // 处理下一首音乐
   const handleNextMusic = async () => {
-    console.log('handleNextMusic', currentMusic, musicFiles.length);
-    if (!currentMusic || musicFiles.length === 0) return;
+    if (!currentMusic.current || musicFiles.current.length === 0) return;
 
-    switch (playMode) {
+    switch (playMode.current) {
       case PlayMode.SINGLE:
         // 单曲循环：重新播放当前歌曲
         try {
@@ -168,32 +215,31 @@ export default function MusicScreen() {
         break;
       case PlayMode.SEQUENCE:
         // 顺序播放：播放下一首歌曲
-        const currentIndex = musicFiles.findIndex(file => file.name === currentMusic.name);
-        const nextIndex = (currentIndex + 1) % musicFiles.length;
-        const nextMusic = musicFiles[nextIndex];
+        const currentIndex = musicFiles.current.findIndex(file => file.name === currentMusic.current?.name);
+        const nextIndex = (currentIndex + 1) % musicFiles.current.length;
+        const nextMusic = musicFiles.current[nextIndex];
         if (nextMusic) {
-          console.log('nextMusic', nextMusic);
           await handlePlayMusic(nextMusic);
         }
         break;
       case PlayMode.RANDOM:
-        const unplayedSongs = musicFiles.filter(item => !item.played);
+        const unplayedSongs = musicFiles.current.filter(item => !item.played);
         if (unplayedSongs.length === 0) {
           // 如果所有歌曲都已播放，重置所有歌曲的播放状态
-          const resetFiles = musicFiles.map(file => ({
+          const resetFiles = musicFiles.current.map(file => ({
             ...file,
-            played: false
+            played: 0
           }));
-          setMusicFiles(resetFiles);
+          musicFiles.current = resetFiles;
           // 保存重置后的状态
           LocalStorage.setItem(`@music/${title}`, JSON.stringify(resetFiles));
           // 从重置后的列表中随机选择一首非当前播放的歌曲
-          const availableSongs = resetFiles.filter(file => file.name !== currentMusic?.name);
+          const availableSongs = resetFiles.filter(file => file.name !== currentMusic.current?.name);
           if (availableSongs.length > 0) {
             const randomIndex = Math.floor(Math.random() * availableSongs.length);
             const randomMusic = availableSongs[randomIndex];
             if (randomMusic) {
-              handlePlayMusic(randomMusic, resetFiles);
+              handlePlayMusic(randomMusic, true, resetFiles);
             }
           }
         } else {
@@ -230,10 +276,10 @@ export default function MusicScreen() {
   }, []);
 
   // 处理播放音乐
-  const handlePlayMusic = async (item: MusicFile, resetFiles?: MusicFile[]) => {
+  const handlePlayMusic = async (item: MusicFile, isNext: boolean = true, resetFiles?: MusicFile[]) => {
     try {
       // 如果正在播放同一首歌
-      if (currentMusic?.name === item.name) {
+      if (currentMusic.current?.name === item.name) {
         if (isPlaying) {
           // 暂停播放
           await TrackPlayer.pause();
@@ -251,23 +297,23 @@ export default function MusicScreen() {
         console.error('Error stopping track:', error);
       }
 
-      // 更新所有音乐的播放状态
-      const updatedFiles = (resetFiles || musicFiles).map(file => ({
-        ...file,
-        played: file.name === item.name ? true : file.played
-      }));
-
-      setMusicFiles(updatedFiles);
-      setCurrentMusic(item);
+      // 更新音乐的播放状态
+      if (isNext) {
+        const mList = resetFiles || musicFiles.current;
+        const maxPlayed = mList.reduce((max, f) => Math.max(max, f.played || 0), 0);
+        const updatedFiles = mList.map(file => ({
+          ...file,
+          played: file.name === item.name ? maxPlayed + 1 : file.played
+        }));
+        item.played = maxPlayed + 1;
+        musicFiles.current = updatedFiles;
+        LocalStorage.setItem(`@music/${title}`, JSON.stringify(updatedFiles));
+      }
+      currentMusic.current = item;
 
       // 创建并播放新的音频实例
       await createAudioInstance(item.uri, true);
-
-      // 保存更新后的状态到 LocalStorage
-      await Promise.all([
-        LocalStorage.setItem(`@music/${title}`, JSON.stringify(updatedFiles)),
-        LocalStorage.setItem(`@music/playing/${title}`, item.name)
-      ]);
+      LocalStorage.setItem(`@music/playing/${title}`, item.name);
 
     } catch (error) {
       console.error('Error playing music:', error);
@@ -276,14 +322,15 @@ export default function MusicScreen() {
 
   const deleteMusicFile = useCallback(async (index: number) => {
     try {
-      const updatedFiles = musicFiles.filter((_, i) => i !== index);
-      setMusicFiles(updatedFiles);
+      const isThis = currentMusic.current && currentMusic.current.name === musicFiles.current[index].name;
+      const updatedFiles = musicFiles.current.filter((_, i) => i !== index);
+      musicFiles.current = updatedFiles;
 
       // 如果删除的是当前播放的音乐，清除播放状态
-      if (currentMusic && currentMusic.name === musicFiles[index].name) {
-        setCurrentMusic(null);
+      if (isThis) {
+        currentMusic.current = null;
         try {
-          await TrackPlayer.stop();
+          await TrackPlayer.reset();
         } catch (error) {
           console.error('Error stopping track:', error);
         }
@@ -291,16 +338,17 @@ export default function MusicScreen() {
       }
 
       LocalStorage.setItem(`@music/${title}`, JSON.stringify(updatedFiles));
+      setRefresh(refresh => refresh + 1);
     } catch (error) {
       console.error('Error deleting music file:', error);
     }
-  }, [currentMusic, musicFiles, title]);
+  }, [title]);
 
   // 搜索功能
   const handleSearch = useCallback(() => {
     if (!searchKeyword.trim()) return;
 
-    const searchResults = musicFiles
+    const searchResults = musicFiles.current
       .map((file, index) => ({ file, index }))
       .filter(({ file }) =>
         file.name.toLowerCase().includes(searchKeyword.toLowerCase())
@@ -325,7 +373,7 @@ export default function MusicScreen() {
       animated: true,
       viewPosition: 0.5
     });
-  }, [searchKeyword, musicFiles, currentSearchIndex]);
+  }, [searchKeyword, currentSearchIndex]);
 
   // 重置搜索状态
   const resetSearch = useCallback(() => {
@@ -341,7 +389,7 @@ export default function MusicScreen() {
       if (!currentPlaying) return;
       const playingMusic = files.find((file: MusicFile) => file.name === currentPlaying);
       if (!playingMusic) return;
-      setCurrentMusic(playingMusic);
+      currentMusic.current = playingMusic;
       // 加载音频但不自动播放
       const res = await createAudioInstance(playingMusic.uri, false);
       if (!res) return;
@@ -357,22 +405,20 @@ export default function MusicScreen() {
     const loadData = async () => {
       try {
         await trackPlayerService.current.initialize();
-        const [savedFiles, currentPlaying, savedPlayMode] = await Promise.all([
-          LocalStorage.getItem(`@music/${title}`),
-          LocalStorage.getItem(`@music/playing/${title}`),
-          LocalStorage.getItem(`@music/playMode`)
-        ]);
+        const savedFiles = LocalStorage.getItem(`@music/${title}`);
+        const currentPlaying = LocalStorage.getItem(`@music/playing/${title}`);
+        const savedPlayMode = LocalStorage.getItem(`@music/playMode`);
 
         // 加载保存的音乐文件
         if (savedFiles) {
           const files = JSON.parse(savedFiles);
-          setMusicFiles(files);
+          musicFiles.current = files;
           initPlayer(currentPlaying, files);
         }
 
         // 加载保存的播放模式
         if (savedPlayMode) {
-          setPlayMode(savedPlayMode as PlayMode);
+          playMode.current = savedPlayMode as PlayMode;
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -401,14 +447,15 @@ export default function MusicScreen() {
       const newFiles = files.map((file) => ({
         name: file.name || '',
         uri: file.uri,
-        played: false,
+        played: 0,
       }));
 
-      const updatedFiles = [...musicFiles, ...newFiles];
-      setMusicFiles(updatedFiles);
+      const updatedFiles = [...musicFiles.current, ...newFiles];
+      musicFiles.current = updatedFiles;
 
       // // 保存到 LocalStorage
       LocalStorage.setItem(`@music/${title}`, JSON.stringify(updatedFiles));
+      setRefresh(refresh => refresh + 1);
     } catch (error) {
       console.error('Error picking music files:', error);
     }
@@ -446,51 +493,33 @@ export default function MusicScreen() {
     };
   }, []);
 
+  // 处理返回逻辑
+  const handleBack = () => {
+    // 返回时重置音乐
+    if (isPlaying) {
+      const pauseMusic = async () => {
+        try {
+          await TrackPlayer.reset();
+        } catch (error) {
+          console.error('Error pausing track:', error);
+        }
+      };
+      pauseMusic();
+    }
+    TrackPlayer.seekTo(0);
+    // 清除最后点击的 item
+    LocalStorage.removeItem('@myapp/lastClickedItem');
+  }
+
   // 处理返回按钮
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // 返回时暂停音乐
-      if (isPlaying) {
-        const pauseMusic = async () => {
-          try {
-            await TrackPlayer.pause();
-          } catch (error) {
-            console.error('Error pausing track:', error);
-          }
-        };
-        pauseMusic();
-      }
-      // 清除最后点击的 item
-      LocalStorage.removeItem('@myapp/lastClickedItem');
+      handleBack();
       return false; // 返回 false 让系统继续处理返回事件
     });
 
     return () => backHandler.remove();
   }, [isPlaying]);
-
-  // 处理应用状态变化
-  useEffect(() => {
-    const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active' && currentMusic) {
-        // 如果应用从后台回到前台，且有音乐实例和当前音乐，恢复播放状态
-        const checkAndResume = async () => {
-          try {
-            const status = await TrackPlayer.getState();
-            if (status === State.Paused || status === State.Ready) {
-              await TrackPlayer.play();
-            }
-          } catch (error) {
-            console.error('Error checking sound status:', error);
-          }
-        };
-        checkAndResume();
-      }
-    });
-
-    return () => {
-      appStateSubscription.remove();
-    };
-  }, [isPlaying, currentMusic]);
 
   return (
     <>
@@ -507,16 +536,7 @@ export default function MusicScreen() {
             <TouchableOpacity
               style={{ width: 24, marginLeft: 15 }}
               onPress={async () => {
-                // 停止音乐播放
-                if (isPlaying) {
-                  try {
-                    await TrackPlayer.pause();
-                  } catch (error) {
-                    console.error('Error pausing track:', error);
-                  }
-                }
-                // 清除最后点击的 item
-                LocalStorage.removeItem('@myapp/lastClickedItem');
+                handleBack();
                 router.back();
               }}>
               <AntDesign name="arrowleft" size={24} color="#fff" />
@@ -534,13 +554,13 @@ export default function MusicScreen() {
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <FlatList
           ref={flatListRef}
-          data={musicFiles}
+          data={musicFiles.current}
           renderItem={({ item, index }) => (
             <MusicItem
               item={item}
               onPress={handlePlayMusic}
               onDelete={() => deleteMusicFile(index)}
-              isCurrent={currentMusic?.name === item.name}
+              isCurrent={currentMusic.current?.name === item.name}
             />
           )}
           keyExtractor={(_, index) => index.toString()}
@@ -549,7 +569,7 @@ export default function MusicScreen() {
         />
         <View style={styles.playerBarContainer}>
           <PlayerBar
-            currentMusic={currentMusic}
+            currentMusic={currentMusic.current}
             isPlaying={isPlaying}
             position={sliderPosition}
             duration={musicDuration}
@@ -560,7 +580,7 @@ export default function MusicScreen() {
             onPlayPause={handlePlayPause}
             onSearch={() => setSearchVisible(true)}
             isDragging={isDragging}
-            playMode={playMode}
+            playMode={playMode.current}
             onPlayModeChange={handlePlayModeChange}
             onPlayNext={handleNextMusic}
             onTimerPress={() => setTimerVisible(true)}

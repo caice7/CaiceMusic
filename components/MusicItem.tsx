@@ -1,12 +1,7 @@
 import AntDesign from '@expo/vector-icons/AntDesign';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-interface MusicFile {
-  name: string;
-  uri: string;
-  played: boolean;
-}
+import { MusicFile } from './PlayerBar';
 
 interface MusicItemProps {
   item: MusicFile;

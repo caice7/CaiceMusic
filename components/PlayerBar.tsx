@@ -3,10 +3,13 @@ import Slider from '@react-native-assets/slider';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-interface MusicFile {
+export interface MusicFile {
+  // 歌名
   name: string;
+  // 地址
   uri: string;
-  played: boolean;
+  // 已播
+  played: number;
 }
 
 export enum PlayMode {
