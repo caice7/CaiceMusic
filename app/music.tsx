@@ -116,7 +116,12 @@ export default function MusicScreen() {
 
   // 处理播放暂停
   const handlePlayPause = useCallback(async () => {
-    if (!currentMusic.current) return;
+    if (!currentMusic.current) {
+      if (musicFiles.current.length > 0) {
+        handleNextMusic();
+      }
+      return;
+    }
 
     try {
       if (isPlaying) {
@@ -201,7 +206,7 @@ export default function MusicScreen() {
 
   // 处理下一首音乐
   const handleNextMusic = async () => {
-    if (!currentMusic.current || musicFiles.current.length === 0) return;
+    if (musicFiles.current.length === 0) return;
 
     switch (playMode.current) {
       case PlayMode.SINGLE:

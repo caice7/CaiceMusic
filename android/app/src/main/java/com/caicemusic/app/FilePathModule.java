@@ -23,6 +23,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.text.Collator;
+import java.util.Locale;
 
 public class FilePathModule extends ReactContextBaseJavaModule {
 
@@ -61,6 +63,83 @@ public class FilePathModule extends ReactContextBaseJavaModule {
         } catch (Exception e) {
             promise.reject("ERROR", e.getMessage());
         }
+    }
+
+    private static final Collator collator = Collator.getInstance(Locale.CHINA);
+
+    private static boolean isEnglishLetter(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    }
+
+    private static boolean isChinese(char c) {
+        // 简单判断中文范围（CJK Unified Ideographs）
+        return c >= 0x4E00 && c <= 0x9FA5;
+    }
+
+    private static int windowsLikeCompare(String s1, String s2) {
+        int i = 0, j = 0;
+        int n1 = s1.length(), n2 = s2.length();
+
+        while (i < n1 && j < n2) {
+            char c1 = s1.charAt(i);
+            char c2 = s2.charAt(j);
+
+            // --- 数字自然排序 ---
+            if (Character.isDigit(c1) && Character.isDigit(c2)) {
+                int startI = i;
+                while (i < n1 && Character.isDigit(s1.charAt(i))) i++;
+                String num1 = s1.substring(startI, i);
+
+                int startJ = j;
+                while (j < n2 && Character.isDigit(s2.charAt(j))) j++;
+                String num2 = s2.substring(startJ, j);
+
+                num1 = num1.replaceFirst("^0+", "");
+                num2 = num2.replaceFirst("^0+", "");
+
+                if (num1.length() != num2.length()) {
+                    return num1.length() - num2.length();
+                }
+                int cmp = num1.compareTo(num2);
+                if (cmp != 0) return cmp;
+                continue;
+            }
+
+            // --- 英文 vs 中文 优先级 ---
+            if (isEnglishLetter(c1) && isChinese(c2)) {
+                return -1; // 英文在前
+            } else if (isChinese(c1) && isEnglishLetter(c2)) {
+                return 1;  // 中文在后
+            }
+
+            // --- 英文 vs 英文 ---
+            if (isEnglishLetter(c1) && isEnglishLetter(c2)) {
+                int cmp = Character.toLowerCase(c1) - Character.toLowerCase(c2);
+                if (cmp != 0) return cmp;
+                i++;
+                j++;
+                continue;
+            }
+
+            // --- 中文 vs 中文 ---
+            if (isChinese(c1) && isChinese(c2)) {
+                String str1 = String.valueOf(c1);
+                String str2 = String.valueOf(c2);
+                int cmp = collator.compare(str1, str2);
+                if (cmp != 0) return cmp;
+                i++;
+                j++;
+                continue;
+            }
+
+            // --- 其他符号，直接比 ---
+            if (c1 != c2) return c1 - c2;
+
+            i++;
+            j++;
+        }
+
+        return (n1 - i) - (n2 - j);
     }
 
     @ReactMethod
@@ -102,12 +181,14 @@ public class FilePathModule extends ReactContextBaseJavaModule {
             }
             cursor.close();
 
-            // 按文件名正序排序
+            // 按 Windows 文件名排序
             Collections.sort(fileList, new Comparator<JSONObject>() {
                 @Override
                 public int compare(JSONObject o1, JSONObject o2) {
                     try {
-                        return o1.getString("name").compareToIgnoreCase(o2.getString("name"));
+                        String name1 = o1.getString("name");
+                        String name2 = o2.getString("name");
+                        return windowsLikeCompare(name1, name2);
                     } catch (JSONException e) {
                         return 0;
                     }

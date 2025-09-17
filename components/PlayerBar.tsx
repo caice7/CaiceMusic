@@ -1,7 +1,9 @@
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Slider from '@react-native-assets/slider';
+import Clipboard from '@react-native-clipboard/clipboard';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import CustomModal from './Modal';
 
 export interface MusicFile {
   // 歌名
@@ -79,6 +81,7 @@ export default function PlayerBar({
   onTimerPress,
   timerActive,
 }: PlayerBarProps) {
+  const [nameModalVisible, setNameModalVisible] = React.useState(false);
 
   // 获取播放模式图标
   const getPlayModeIcon = () => {
@@ -94,13 +97,23 @@ export default function PlayerBar({
     }
   };
 
+  // 复制歌名
+  const handleCopyName = () => {
+    if (currentMusic?.name) {
+      Clipboard.setString(currentMusic.name);
+    }
+    setNameModalVisible(false);
+  };
+
   return (
     <View style={styles.playerBar}>
       <View style={styles.playerInfo}>
         <Text style={styles.timeText}>{position}</Text>
-        <Text style={styles.playerTitle} numberOfLines={1}>
-          {currentMusic?.name || ''}
-        </Text>
+        <TouchableOpacity style={styles.playerTitleContainer} onPress={() => setNameModalVisible(true)}>
+          <Text style={styles.playerTitle} numberOfLines={1}>
+            {currentMusic?.name || ''}
+          </Text>
+        </TouchableOpacity>
         <Text style={styles.timeText}>{formatTime(duration)}</Text>
       </View>
       <View style={styles.controls}>
@@ -165,6 +178,13 @@ export default function PlayerBar({
           <AntDesign name="clockcircleo" size={BUTTON_SIZE} color="#fff" />
         </TouchableOpacity>
       </View>
+      <CustomModal
+        visible={nameModalVisible}
+        onClose={() => setNameModalVisible(false)}>
+        <TouchableOpacity onPress={handleCopyName}>
+          <Text>{currentMusic?.name}</Text>
+        </TouchableOpacity>
+      </CustomModal>
     </View>
   );
 }
@@ -184,10 +204,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 5,
   },
+  playerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
   playerTitle: {
     color: '#fff',
     fontSize: 14,
-    flex: 1,
     textAlign: 'center',
     marginHorizontal: 10,
   },
