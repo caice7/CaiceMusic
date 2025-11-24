@@ -48,3 +48,22 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## 运行
+npm start
+
+## 打包
+cd .\android\
+./gradlew assembleDebug
+\android\app\build\outputs\apk\debug\app-arm64-v8a-debug.apk
+
+./gradlew assembleRelease
+\android\app\build\outputs\apk\release\app-arm64-v8a-release.apk
+
+## 无线连接
+adb connect ip:port
+## 查看是否连接成功
+adb devices
+## 安装包
+adb install XXX.apk
+adb install -r ip:port XXX.apk

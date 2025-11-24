@@ -1,3 +1,4 @@
+import ConfirmModal from '@/components/ConfirmModal';
 import MusicItem from '@/components/MusicItem';
 import PlayerBar, { formatTime, MusicFile, PlayMode } from '@/components/PlayerBar';
 import SearchModal from '@/components/SearchModal';
@@ -38,6 +39,8 @@ export default function MusicScreen() {
   const { position, duration } = useProgress(500);
   const playbackState = usePlaybackState();
   const [refresh, setRefresh] = useState(0);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleteItem, setDeleteItem] = useState<number>(0);
 
   // 更新进度（替代 setDuration + setPosition）
   useEffect(() => {
@@ -325,8 +328,10 @@ export default function MusicScreen() {
     }
   };
 
-  const deleteMusicFile = useCallback(async (index: number) => {
+  // 删除音乐
+  const deleteMusic = async () => {
     try {
+      const index = deleteItem;
       const isThis = currentMusic.current && currentMusic.current.name === musicFiles.current[index].name;
       const updatedFiles = musicFiles.current.filter((_, i) => i !== index);
       musicFiles.current = updatedFiles;
@@ -347,7 +352,31 @@ export default function MusicScreen() {
     } catch (error) {
       console.error('Error deleting music file:', error);
     }
-  }, [title]);
+  };
+
+  // 定位当前播放的歌曲
+  const handleLocation = () => {
+    if (!currentMusic.current || musicFiles.current.length === 0) {
+      alert('当前没有正在播放的歌曲');
+      return;
+    }
+
+    const currentIndex = musicFiles.current.findIndex(
+      file => file.name === currentMusic.current?.name
+    );
+
+    if (currentIndex === -1) {
+      alert('未找到当前播放的歌曲');
+      return;
+    }
+
+    // 滚动到当前播放的歌曲位置
+    flatListRef.current?.scrollToIndex({
+      index: currentIndex,
+      animated: true,
+      viewPosition: 0.5 // 将目标项定位在列表中间位置
+    });
+  }
 
   // 搜索功能
   const handleSearch = useCallback(() => {
@@ -564,7 +593,10 @@ export default function MusicScreen() {
             <MusicItem
               item={item}
               onPress={handlePlayMusic}
-              onDelete={() => deleteMusicFile(index)}
+              onDelete={() => {
+                setDeleteItem(index);
+                setDeleteModalVisible(true);
+              }}
               isCurrent={currentMusic.current?.name === item.name}
             />
           )}
@@ -600,6 +632,7 @@ export default function MusicScreen() {
           setSearchVisible(false);
           resetSearch();
         }}
+        onLocation={handleLocation}
         searchKeyword={searchKeyword}
         onSearchKeywordChange={setSearchKeyword}
         onSearch={handleSearch}
@@ -610,6 +643,13 @@ export default function MusicScreen() {
         onClose={() => setTimerVisible(false)}
         onSelectTime={handleTimerSelect}
       />
+
+      <ConfirmModal
+        visible={deleteModalVisible}
+        onClose={() => setDeleteModalVisible(false)}
+        onConfirm={deleteMusic}
+        title="确定删除该歌曲吗？">
+      </ConfirmModal>
     </>
   );
 }

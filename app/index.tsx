@@ -1,3 +1,4 @@
+import ConfirmModal from '@/components/ConfirmModal';
 import CustomModal from '@/components/Modal';
 import LocalStorage from '@/utils/storage';
 import AntDesign from '@expo/vector-icons/AntDesign';
@@ -11,6 +12,8 @@ export default function HomeScreen() {
   const [items, setItems] = useState<string[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [inputText, setInputText] = useState('');
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleteItem, setDeleteItem] = useState<{ item: string, index: number }>();
 
   useFocusEffect(
     useCallback(() => {
@@ -61,7 +64,9 @@ export default function HomeScreen() {
     }
   };
 
-  const deleteItem = async (index: number, item: string) => {
+  const handleDeleteItem = async () => {
+    if (!deleteItem) return;
+    const { index, item } = deleteItem;
     try {
       const storedItems = LocalStorage.getItem(STORAGE_KEY);
       if (storedItems) {
@@ -96,7 +101,10 @@ export default function HomeScreen() {
       <Text style={styles.itemText}>{item}</Text>
       <TouchableOpacity
         style={styles.deleteButton}
-        onPress={() => deleteItem(index, item)}>
+        onPress={() => {
+          setDeleteItem({ item, index });
+          setDeleteModalVisible(true);
+        }}>
         <AntDesign name="minuscircleo" size={18} color="#666" />
       </TouchableOpacity>
     </TouchableOpacity>
@@ -151,6 +159,13 @@ export default function HomeScreen() {
           <Text style={styles.buttonText}>添加</Text>
         </TouchableOpacity>
       </CustomModal>
+
+      <ConfirmModal
+        visible={deleteModalVisible}
+        onClose={() => setDeleteModalVisible(false)}
+        onConfirm={handleDeleteItem}
+        title="确定删除该分类吗？">
+      </ConfirmModal>
     </>
   );
 }

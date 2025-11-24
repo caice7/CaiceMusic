@@ -5,6 +5,7 @@ import CustomModal from './Modal';
 interface SearchModalProps {
   visible: boolean;
   onClose: () => void;
+  onLocation: () => void;
   searchKeyword: string;
   onSearchKeywordChange: (text: string) => void;
   onSearch: () => void;
@@ -15,6 +16,7 @@ export default function SearchModal({
   onClose,
   searchKeyword,
   onSearchKeywordChange,
+  onLocation,
   onSearch,
 }: SearchModalProps) {
   return (
@@ -32,13 +34,18 @@ export default function SearchModal({
       <View style={styles.modalButtons}>
         <TouchableOpacity
           style={styles.modalButton}
-          onPress={onClose}>
-          <Text style={styles.modalButtonText}>取消</Text>
+          onPress={onLocation}>
+          <Text style={styles.modalButtonText}>当前定位</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.modalButton}
           onPress={onSearch}>
           <Text style={styles.modalButtonText}>搜索</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.modalButton}
+          onPress={onClose}>
+          <Text style={styles.modalButtonText}>取消</Text>
         </TouchableOpacity>
       </View>
     </CustomModal>

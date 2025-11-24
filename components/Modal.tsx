@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
 
-interface ModalProps {
+export interface ModalProps {
   visible: boolean;
   onClose: () => void;
   title?: string;
